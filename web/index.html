@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Opple Bridge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png">
+    <script>
+        tailwind.config = {
+            theme: { extend: { fontFamily: { mono: ['JetBrains Mono', 'monospace'] } } }
+        }
+    </script>
+</head>
+<body x-data="oppleBridge()" x-init="init()" class="min-h-screen font-mono" style="background:var(--bg-primary);color:var(--text-primary);">
+
+    <!-- ═══════════════════════════════════════════════════
+         HEADER
+    ═══════════════════════════════════════════════════ -->
+    <header class="header-bar">
+        <!-- Left: brand · mock · target -->
+        <div class="flex items-center gap-3 flex-wrap min-w-0">
+            <span class="brand">OPPLE&nbsp;BRIDGE</span>
+
+            <template x-if="data.connection.mock_mode">
+                <span class="badge-mock">MOCK</span>
+            </template>
+
+            <template x-if="!target && data.connection.status === 'connected'">
+                <button @click="saveTarget()" class="btn-ghost btn-ghost-amber" title="Save current measurement as target">
+                    <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                    </svg>
+                    Save Target
+                </button>
+            </template>
+
+            <template x-if="target">
+                <div class="target-badge">
+                    <svg class="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                    </svg>
+                    <span class="target-badge-name" x-text="targetName"></span>
+                    <button @click="clearTarget()" class="target-badge-clear" title="Clear target" aria-label="Clear target">&times;</button>
+                </div>
+            </template>
+        </div>
+
+        <!-- Right: device pill (when connected) · status · connect/disconnect -->
+        <div class="flex items-center gap-3 flex-wrap justify-end">
+
+            <!-- Device pill: icon, name, MAC, battery -->
+            <template x-if="data.connection.status === 'connected' && data.connection.device_name">
+                <div class="device-pill" :title="data.connection.device_address || ''">
+                    <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 7l12 10-6 4V3l6 4L6 17"/>
+                    </svg>
+                    <div class="device-pill-text">
+                        <span class="device-pill-name" x-text="data.connection.device_name"></span>
+                        <span class="device-pill-mac" x-text="formatMac(data.connection.device_address)"></span>
+                    </div>
+                    <template x-if="data.connection.battery_pct != null">
+                        <div class="battery-indicator" :class="batteryClass(data.connection.battery_pct)"
+                             :title="'Battery ' + data.connection.battery_pct + '%'">
+                            <div class="battery-shell">
+                                <div class="battery-fill" :style="'width:' + Math.max(6, data.connection.battery_pct) + '%'"></div>
+                            </div>
+                            <span class="battery-pct" x-text="data.connection.battery_pct + '%'"></span>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <!-- Status dot + connect/disconnect (kept together so mobile space-between aligns this group right) -->
+            <div class="header-status-group flex items-center gap-3 flex-shrink-0">
+                <span class="dot"
+                      :class="{
+                          'dot-green':  data.connection.status === 'connected',
+                          'dot-orange': data.connection.status === 'reconnecting' || data.connection.status === 'connecting' || scanning,
+                          'dot-red':    data.connection.status === 'disconnected' && !scanning
+                      }"
+                      role="status"
+                      :aria-label="data.connection.status"></span>
+                <span class="status-label hidden sm:inline" x-text="scanning ? 'scanning' : data.connection.status"></span>
+
+                <template x-if="data.connection.status === 'disconnected' && !scanning">
+                    <button @click="scanAndConnect()" class="btn-ghost">Connect</button>
+                </template>
+                <template x-if="data.connection.status === 'connected'">
+                    <button @click="disconnectDevice()" class="btn-ghost">Disconnect</button>
+                </template>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════
+         DEVICE SELECTOR MODAL
+    ═══════════════════════════════════════════════════ -->
+    <template x-if="showDeviceList">
+        <div class="modal-overlay" @click.self="cancelDeviceList()">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <div>
+                        <div class="modal-title">Select Device</div>
+                        <div class="modal-subtitle" x-text="devices.length + ' device' + (devices.length === 1 ? '' : 's') + ' found'"></div>
+                    </div>
+                    <button @click="rescanDevices()" class="btn-ghost" :disabled="scanning">
+                        <span x-text="scanning ? 'Scanning…' : 'Rescan'"></span>
+                    </button>
+                </div>
+                <div class="modal-device-list">
+                    <template x-for="dev in devices" :key="dev.address">
+                        <button @click="connectToDevice(dev.address)" class="modal-device-card">
+                            <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M6 7l12 10-6 4V3l6 4L6 17"/>
+                            </svg>
+                            <div class="flex-1 min-w-0">
+                                <div class="modal-device-name" x-text="dev.name"></div>
+                                <div class="modal-device-mac" x-text="dev.address"></div>
+                            </div>
+                            <template x-if="dev.rssi != null">
+                                <div class="modal-device-rssi" x-text="dev.rssi + ' dBm'"></div>
+                            </template>
+                        </button>
+                    </template>
+                    <template x-if="!devices.length && !scanning">
+                        <div class="modal-empty">No devices found.</div>
+                    </template>
+                </div>
+                <button @click="cancelDeviceList()" class="modal-cancel">Cancel</button>
+            </div>
+        </div>
+    </template>
+
+    <!-- ═══════════════════════════════════════════════════
+         MAIN
+    ═══════════════════════════════════════════════════ -->
+    <main class="p-2 md:p-4 flex flex-col gap-2">
+
+        <!-- ── ROW: CIE  +  Right metrics column ── -->
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-2">
+
+            <!-- CIE 1931 -->
+            <div class="card-raised p-3 lg:col-span-3 order-1 lg:order-1">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <div class="sec-label">CIE 1931 Chromaticity</div>
+                        <button @click="toggleInfo('cie', $event)" class="info-trigger info-btn" aria-label="Info CIE">i</button>
+                    </div>
+                    <div class="hidden sm:flex items-center gap-4 text-xs" style="color:var(--text-secondary);">
+                        <span>
+                            x&nbsp;=&nbsp;<span class="font-semibold" style="color:var(--text-primary);" x-text="(data.cie_x ?? 0).toFixed(4)"></span>
+                            <template x-if="target">
+                                <span class="delta-inline" :class="deltaColor('cie_x', 0.003, 0.005)" x-text="deltaFmt('cie_x', 4)"></span>
+                            </template>
+                        </span>
+                        <span>
+                            y&nbsp;=&nbsp;<span class="font-semibold" style="color:var(--text-primary);" x-text="(data.cie_y ?? 0).toFixed(4)"></span>
+                            <template x-if="target">
+                                <span class="delta-inline" :class="deltaColor('cie_y', 0.003, 0.005)" x-text="deltaFmt('cie_y', 4)"></span>
+                            </template>
+                        </span>
+                    </div>
+                </div>
+                <div x-show="activeInfo === 'cie'" x-transition.opacity.duration.150 class="info-popover mb-2" x-text="paramInfo.cie"></div>
+                <div class="cie-canvas-wrap">
+                    <canvas x-ref="cieCanvas" class="w-full h-full block"></canvas>
+                </div>
+                <div class="flex sm:hidden justify-center gap-6 mt-2 text-xs" style="color:var(--text-secondary);">
+                    <span>x&nbsp;=&nbsp;<span class="font-semibold" style="color:var(--text-primary);" x-text="(data.cie_x ?? 0).toFixed(4)"></span></span>
+                    <span>y&nbsp;=&nbsp;<span class="font-semibold" style="color:var(--text-primary);" x-text="(data.cie_y ?? 0).toFixed(4)"></span></span>
+                </div>
+            </div>
+
+            <!-- Right metrics column -->
+            <div class="lg:col-span-2 flex flex-col gap-2 order-2 lg:order-2">
+
+                <!-- Hero: CCT + Illuminance -->
+                <section class="card-raised hero-row">
+                    <div class="hero-cell">
+                        <div class="hero-header">
+                            <div class="flex items-center gap-2">
+                                <div class="sec-label">Color Temperature</div>
+                                <button @click="toggleInfo('cct', $event)" class="info-trigger info-btn" aria-label="Info CCT">i</button>
+                            </div>
+                            <span class="hero-unit">K</span>
+                        </div>
+                        <div class="hero-value-row">
+                            <span class="hero-value" x-text="data.cct_k || '\u2014'"></span>
+                            <div class="cct-swatch" :style="'background:' + cctToColor(data.cct_k)"></div>
+                        </div>
+                        <template x-if="target">
+                            <div class="hero-delta" :class="deltaColor('cct_k', 50, 100)" x-text="deltaFmt('cct_k', 0, 'K')"></div>
+                        </template>
+                        <div x-show="activeInfo === 'cct'" x-transition.opacity.duration.150 class="info-popover mt-2" x-text="paramInfo.cct"></div>
+                    </div>
+
+                    <div class="hero-divider"></div>
+
+                    <div class="hero-cell">
+                        <div class="hero-header">
+                            <div class="flex items-center gap-2">
+                                <div class="sec-label">Illuminance</div>
+                                <button @click="toggleInfo('lux', $event)" class="info-trigger info-btn" aria-label="Info Lux">i</button>
+                            </div>
+                            <span class="hero-unit">lx</span>
+                        </div>
+                        <div class="hero-value-row">
+                            <span class="hero-value" x-text="formatLux(data.lux)"></span>
+                        </div>
+                        <template x-if="target">
+                            <div class="hero-delta" :class="deltaPctColor('lux', 5, 10)" x-text="deltaPctFmt('lux')"></div>
+                        </template>
+                        <div x-show="activeInfo === 'lux'" x-transition.opacity.duration.150 class="info-popover mt-2" x-text="paramInfo.lux"></div>
+                    </div>
+                </section>
+
+                <!-- Duv -->
+                <div class="card p-3 relative">
+                    <div class="flex items-center justify-between">
+                        <div class="flex flex-col gap-0.5">
+                            <div class="flex items-center gap-2">
+                                <div class="sec-label">Duv</div>
+                                <button @click="toggleInfo('duv', $event)" class="info-trigger info-btn" aria-label="Info Duv">i</button>
+                            </div>
+                            <div class="metric-sub">Planckian distance</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="metric-val"
+                                 :class="Math.abs(data.duv ?? 0) < 0.003 ? 'text-green-400' : Math.abs(data.duv ?? 0) < 0.006 ? 'text-yellow-400' : 'text-red-400'"
+                                 x-text="formatDuv(data.duv ?? 0)"></div>
+                            <template x-if="target">
+                                <div class="text-xs mt-0.5" :class="deltaColor('duv', 0.002, 0.005)" x-text="deltaFmt('duv', 4)"></div>
+                            </template>
+                        </div>
+                    </div>
+                    <div x-show="activeInfo === 'duv'" x-transition.opacity.duration.150 class="info-popover mt-2" x-text="paramInfo.duv"></div>
+                </div>
+
+                <!-- 2×2 compact metrics -->
+                <div class="grid grid-cols-2 gap-2">
+                    <!-- u'v' -->
+                    <div class="card p-3 relative compact-metric">
+                        <div class="compact-metric-header">
+                            <div class="sec-label" style="color:var(--accent)">CIE u', v'</div>
+                            <button @click="toggleInfo('uv', $event)" class="info-trigger info-btn-sm" aria-label="Info u'v'">i</button>
+                        </div>
+                        <div class="metric-val text-white text-sm"
+                             x-text="(data.cie_u ?? 0).toFixed(4) + ', ' + (data.cie_v ?? 0).toFixed(4)"></div>
+                        <div x-show="activeInfo === 'uv'" x-transition.opacity.duration.150 class="info-popover mt-2 text-left" x-text="paramInfo.uv"></div>
+                    </div>
+
+                    <!-- R9 -->
+                    <div class="card p-3 relative compact-metric">
+                        <div class="compact-metric-header">
+                            <div class="sec-label" style="color:var(--accent)">R9</div>
+                            <button @click="toggleInfo('r9', $event)" class="info-trigger info-btn-sm" aria-label="Info R9">i</button>
+                        </div>
+                        <div class="metric-val"
+                             :class="(data.r9 ?? 0) >= 50 ? 'text-green-400' : (data.r9 ?? 0) >= 0 ? 'text-yellow-400' : 'text-red-400'"
+                             x-text="data.r9 != null ? data.r9.toFixed(1) : '\u2014'"></div>
+                        <div class="compact-metric-sub">Deep Red</div>
+                        <template x-if="target && target.r9 != null">
+                            <div class="text-xs mt-0.5" :class="deltaColor('r9', 5, 10)" x-text="deltaFmt('r9', 1)"></div>
+                        </template>
+                        <div x-show="activeInfo === 'r9'" x-transition.opacity.duration.150 class="info-popover mt-2 text-left" x-text="paramInfo.r9"></div>
+                    </div>
+
+                    <!-- CS -->
+                    <div class="card p-3 relative compact-metric">
+                        <div class="compact-metric-header">
+                            <div class="sec-label" style="color:var(--accent)">CS</div>
+                            <button @click="toggleInfo('cs', $event)" class="info-trigger info-btn-sm" aria-label="Info CS">i</button>
+                        </div>
+                        <div class="metric-val text-white" x-text="data.cs != null ? data.cs.toFixed(3) : '\u2014'"></div>
+                        <div class="compact-metric-sub">Circadian Stim.</div>
+                        <template x-if="target && target.cs != null">
+                            <div class="text-xs mt-0.5" :class="deltaColor('cs', 0.05, 0.1)" x-text="deltaFmt('cs', 3)"></div>
+                        </template>
+                        <div x-show="activeInfo === 'cs'" x-transition.opacity.duration.150 class="info-popover mt-2 text-left" x-text="paramInfo.cs"></div>
+                    </div>
+
+                    <!-- EML -->
+                    <div class="card p-3 relative compact-metric">
+                        <div class="compact-metric-header">
+                            <div class="sec-label" style="color:var(--accent)">EML</div>
+                            <button @click="toggleInfo('eml', $event)" class="info-trigger info-btn-sm" aria-label="Info EML">i</button>
+                        </div>
+                        <div class="metric-val text-white" x-text="data.eml != null ? Math.round(data.eml) : '\u2014'"></div>
+                        <div class="compact-metric-sub">Melanopic Lux</div>
+                        <template x-if="target && target.eml != null">
+                            <div class="text-xs mt-0.5" :class="deltaPctColor('eml', 10, 20)" x-text="deltaPctFmt('eml')"></div>
+                        </template>
+                        <div x-show="activeInfo === 'eml'" x-transition.opacity.duration.150 class="info-popover mt-2 text-left" x-text="paramInfo.eml"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ── ROW: Spectrum ── -->
+        <div class="card p-3">
+            <div class="sec-label mb-2">Spectrum</div>
+            <div style="height:140px;" class="spectrum-track">
+                <template x-for="(ch, i) in (data.spectrum || []).slice(0, 6)" :key="i">
+                    <div class="spectrum-col">
+                        <div class="spectrum-bar-wrap">
+                            <div class="spectrum-bar"
+                                 :style="'height:' + barHeight(ch) + '%; background:' + spectrumColors[i]"></div>
+                        </div>
+                        <div class="spectrum-bar-label" x-text="spectrumNames[i]"></div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- ── ROW: CRI ── -->
+        <div class="card p-3 relative">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <div class="sec-label">CRI</div>
+                    <button @click="toggleInfo('cri', $event)" class="info-trigger info-btn-sm" aria-label="Info CRI">i</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs" style="color:var(--text-dim);letter-spacing:0.06em;">Ra</span>
+                    <span class="text-xl font-bold" style="font-variant-numeric:tabular-nums;"
+                          :class="(data.cri_ra ?? 0) >= 90 ? 'text-green-400' : (data.cri_ra ?? 0) >= 80 ? 'text-yellow-400' : 'text-red-400'"
+                          x-text="data.cri_ra != null ? data.cri_ra.toFixed(1) : '\u2014'"></span>
+                    <template x-if="target && target.cri_ra != null">
+                        <span class="text-xs" :class="deltaColor('cri_ra', 2, 5)" x-text="deltaFmt('cri_ra', 1)"></span>
+                    </template>
+                </div>
+            </div>
+
+            <div x-show="activeInfo === 'cri'" x-transition.opacity.duration.150 class="info-popover mb-2" x-text="paramInfo.cri"></div>
+
+            <div style="height:110px;" class="cri-track">
+                <template x-for="(r, i) in (data.r_values || [])" :key="i">
+                    <div class="cri-col">
+                        <div class="cri-bar-wrap">
+                            <div class="cri-bar"
+                                 :style="'height:' + Math.max(0, Math.min(100, r)) + '%'"></div>
+                        </div>
+                        <div class="cri-bar-label" x-text="'R' + (i + 1)"></div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- R9 / R13 / R14 callouts -->
+            <div class="cri-callout">
+                <div class="cri-callout-item">
+                    <span class="cri-callout-label">R9 deep red</span>
+                    <button @click="toggleInfo('r9_callout', $event)" class="info-trigger info-btn-sm" aria-label="Info R9">i</button>
+                    <span class="font-semibold"
+                          :class="data.r_values && data.r_values[8] >= 50 ? 'text-green-400' : data.r_values && data.r_values[8] >= 0 ? 'text-yellow-400' : 'text-red-400'"
+                          x-text="data.r_values && data.r_values[8] != null ? data.r_values[8].toFixed(1) : '\u2014'"></span>
+                </div>
+                <div class="cri-callout-item">
+                    <span class="cri-callout-label">R13 skin</span>
+                    <button @click="toggleInfo('r13', $event)" class="info-trigger info-btn-sm" aria-label="Info R13">i</button>
+                    <span class="font-semibold"
+                          :class="data.r_values && data.r_values[12] >= 80 ? 'text-green-400' : 'text-yellow-400'"
+                          x-text="data.r_values && data.r_values[12] != null ? data.r_values[12].toFixed(1) : '\u2014'"></span>
+                </div>
+                <div class="cri-callout-item" x-show="data.r_values && data.r_values.length >= 14">
+                    <span class="cri-callout-label">R14 leaf</span>
+                    <button @click="toggleInfo('r14', $event)" class="info-trigger info-btn-sm" aria-label="Info R14">i</button>
+                    <span class="font-semibold"
+                          :class="data.r_values && data.r_values[13] >= 80 ? 'text-green-400' : 'text-yellow-400'"
+                          x-text="data.r_values && data.r_values[13] != null ? data.r_values[13].toFixed(1) : '\u2014'"></span>
+                </div>
+            </div>
+
+            <div x-show="activeInfo === 'r9_callout' || activeInfo === 'r13' || activeInfo === 'r14'"
+                 x-transition.opacity.duration.150 class="info-popover mt-2"
+                 x-text="paramInfo[activeInfo === 'r9_callout' ? 'r9' : activeInfo] || ''"></div>
+        </div>
+
+        <!-- ── ROW: Flicker ── -->
+        <div class="card p-3">
+            <div class="flex items-center justify-between mb-3">
+                <div class="sec-label">Flicker / IEEE 1789</div>
+                <button @click="requestFlicker()" class="btn-ghost min-h-touch" :disabled="flickerLoading" aria-label="Measure flicker">
+                    <span x-text="flickerLoading ? 'Measuring...' : 'Measure'"></span>
+                </button>
+            </div>
+
+            <template x-if="flicker">
+                <div>
+                    <div class="flex items-center gap-3 mb-3 flex-wrap">
+                        <span class="badge-risk" :class="'badge-' + flicker.risk_level"
+                              x-text="flicker.risk_level.replace('_', ' ').toUpperCase()"></span>
+
+                        <div class="flex gap-4 flex-wrap">
+                            <div class="flicker-stat info-trigger cursor-pointer" @click="toggleInfo('flicker_freq', $event)">
+                                <div class="flicker-stat-label">Freq</div>
+                                <div class="flicker-stat-val" x-text="flicker.frequency_hz.toFixed(1) + ' Hz'"></div>
+                            </div>
+                            <div class="flicker-stat info-trigger cursor-pointer" @click="toggleInfo('flicker_mod', $event)">
+                                <div class="flicker-stat-label">Mod</div>
+                                <div class="flicker-stat-val" x-text="flicker.modulation_pct.toFixed(2) + '%'"></div>
+                            </div>
+                            <div class="flicker-stat info-trigger cursor-pointer" @click="toggleInfo('flicker_fi', $event)">
+                                <div class="flicker-stat-label">FI</div>
+                                <div class="flicker-stat-val" x-text="flicker.flicker_index.toFixed(4)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div x-show="activeInfo === 'flicker_freq' || activeInfo === 'flicker_mod' || activeInfo === 'flicker_fi'"
+                         x-transition.opacity.duration.150 class="info-popover mb-3"
+                         x-text="paramInfo[activeInfo] || ''"></div>
+
+                    <div style="height:clamp(280px, 48vh, 420px);">
+                        <canvas x-ref="flickerCanvas" class="w-full h-full block"></canvas>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="!flicker">
+                <div class="text-center py-8" style="color:var(--text-muted);font-size:0.72rem;letter-spacing:0.04em;">
+                    Press "Measure" to analyze flicker
+                </div>
+            </template>
+        </div>
+
+    </main>
+
+    <footer class="text-center py-3 px-4" style="color:var(--text-muted);font-size:0.58rem;letter-spacing:0.1em;border-top:1px solid var(--border-subtle);">
+        OPPLE BRIDGE v0.1
+    </footer>
+
+    <!-- ═══════════════════════════════════════════════════
+         TOAST
+    ═══════════════════════════════════════════════════ -->
+    <div x-show="toast"
+         x-transition:enter="transition ease-out duration-250"
+         x-transition:enter-start="opacity-0 translate-y-3"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-3"
+         class="toast"
+         :class="{
+             'toast-success': toastType === 'success',
+             'toast-warn':    toastType === 'warn',
+             'toast-error':   toastType === 'error',
+             'toast-info':    toastType === 'info'
+         }"
+         @click="toast = null">
+        <span x-text="toast"></span>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/js/utils/colors.js"></script>
+    <script src="/js/utils/cie-diagram.js"></script>
+    <script src="/js/config/param-info.js"></script>
+    <script src="/js/modules/connection.js"></script>
+    <script src="/js/modules/target.js"></script>
+    <script src="/js/modules/flicker-chart.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
