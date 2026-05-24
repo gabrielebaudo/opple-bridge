@@ -21,8 +21,13 @@ htmlcov/
 .env.*
 !.env.example
 
+# Local Pi config (contains real credentials)
+raspberry/config/wifi.yaml
+raspberry/config/sidecar.env
+
 # OS
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
+.worktrees/

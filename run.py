@@ -7,7 +7,7 @@ if __name__ == "__main__":
         "opple_bridge.main:app",
         host=settings.host,
         port=settings.port,
-        reload=True,
+        reload=settings.reload,
         log_level=settings.log_level,
         access_log=False,
     )

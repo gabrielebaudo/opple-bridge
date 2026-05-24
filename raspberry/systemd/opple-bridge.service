@@ -1,0 +1,20 @@
+[Unit]
+Description=Opple Bridge (FastAPI + BLE)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__REPO_DIR__
+ExecStart=__REPO_DIR__/venv/bin/python run.py
+Restart=always
+RestartSec=3
+StartLimitBurst=5
+StartLimitIntervalSec=300
+Environment=MOCK_MODE=false
+Environment=LOG_LEVEL=warning
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

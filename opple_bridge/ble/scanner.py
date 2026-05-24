@@ -11,7 +11,7 @@ from opple_bridge.config import settings
 
 logger = logging.getLogger(__name__)
 
-KNOWN_NAMES = ("sigmesh", "light master", "opple", "lm iv", "lm4")
+KNOWN_NAMES = ("sigmesh", "light master", "lmaster", "opple", "lm iv", "lm4")
 
 
 def _device_name(device: BLEDevice, adv) -> str:

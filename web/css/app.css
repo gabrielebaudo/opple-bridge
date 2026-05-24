@@ -1,3 +1,32 @@
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/vendor/jetbrains-mono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/vendor/jetbrains-mono-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/vendor/jetbrains-mono-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/vendor/jetbrains-mono-700.woff2') format('woff2');
+}
+
 /* Opple Bridge — Professional console theme */
 
 :root {
@@ -450,7 +479,10 @@ button, [role="button"] { touch-action: manipulation; }
     align-items: center;
     justify-content: center;
     padding: 16px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
     overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -919,4 +951,446 @@ button, [role="button"] { touch-action: manipulation; }
     .hero-value       { font-size: 2.4rem; }
     .device-pill      { padding: 5px 9px; gap: 8px; }
     .battery-shell    { width: 24px; height: 11px; }
+}
+
+/* ═══════════════════════════════════════════════════
+   SETTINGS PANEL
+═══════════════════════════════════════════════════ */
+
+/* Gear icon button in header — icon-only, same visual weight as btn-ghost */
+.settings-gear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid #2e2e2e;
+    color: #888;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+.settings-gear:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: #444;
+    color: #ccc;
+}
+.settings-gear:active {
+    background: rgba(255,255,255,0.12);
+    color: var(--accent);
+}
+
+/* Modal box override for settings (wider, taller, scrollable) */
+.settings-modal-box {
+    max-width: 560px;
+    max-height: calc(100vh - 48px);
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+    .modal-overlay {
+        align-items: flex-start;
+        justify-content: center;
+        padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+    }
+    .settings-modal-box {
+        width: calc(100vw - 16px);
+        max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+        padding: 14px;
+    }
+}
+
+/* Section divider with label */
+.settings-section {
+    border-top: 1px solid var(--border-subtle);
+    padding: 14px 0 2px;
+    margin-top: 2px;
+}
+.settings-section:first-of-type {
+    border-top: none;
+    padding-top: 0;
+}
+
+.settings-section-label {
+    font-size: 0.56rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.settings-section-hint {
+    font-size: 0.52rem;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    text-transform: none;
+    font-weight: 400;
+    margin-left: 4px;
+}
+
+/* Footer system info line */
+.settings-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    font-size: 0.56rem;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    padding-top: 10px;
+    padding-bottom: 4px;
+}
+
+/* ── WiFi status row ──────────────────────────────── */
+.wifi-status-row {
+    font-size: 0.68rem;
+    min-height: 20px;
+}
+
+.wifi-status-connected {
+    color: var(--green-bright);
+}
+.wifi-status-connected strong {
+    font-weight: 600;
+}
+.wifi-status-ip {
+    color: var(--text-secondary);
+    margin-left: 2px;
+}
+.wifi-status-hotspot {
+    color: var(--amber);
+}
+.wifi-status-disconnected {
+    color: var(--text-dim);
+}
+
+/* ── WiFi list ────────────────────────────────────── */
+.wifi-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 4px;
+}
+
+.wifi-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.02);
+    transition: border-color 0.15s, opacity 0.15s;
+    min-width: 0;
+}
+
+.wifi-row-dragging {
+    opacity: 0.4;
+}
+
+.wifi-row-editing {
+    border-color: var(--accent);
+    background: rgba(95,168,216,0.05);
+}
+
+/* Drag handle — hidden on touch, shown on pointer:fine (mouse) */
+.wifi-drag-handle {
+    font-size: 1rem;
+    color: var(--text-muted);
+    cursor: grab;
+    flex-shrink: 0;
+    line-height: 1;
+    display: none; /* shown only on pointer:fine below */
+}
+
+@media (pointer: fine) {
+    .wifi-drag-handle { display: inline; }
+}
+
+.wifi-row-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.wifi-row-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+.wifi-row-ssid {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 22ch;
+}
+
+.wifi-connected-badge {
+    font-size: 0.52rem;
+    color: var(--green-bright);
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+}
+
+.wifi-row-meta {
+    font-size: 0.56rem;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Edit inline form */
+.wifi-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 2px 0;
+}
+
+.wifi-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.wifi-edit-label {
+    font-size: 0.56rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    flex-shrink: 0;
+    min-width: 80px;
+}
+
+.wifi-edit-input {
+    flex: 1;
+    min-width: 0;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-accent);
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.66rem;
+    padding: 5px 8px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.wifi-edit-input:focus {
+    border-color: var(--accent);
+}
+
+.wifi-edit-input-sm {
+    max-width: 72px;
+    flex: none;
+}
+
+.wifi-edit-pass-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.wifi-edit-pass-wrap .wifi-edit-input {
+    width: 100%;
+    padding-right: 36px;
+}
+
+.wifi-edit-eye {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    color: var(--text-dim);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.wifi-edit-eye:hover {
+    color: var(--text-secondary);
+}
+
+.wifi-edit-actions {
+    display: flex;
+    gap: 6px;
+}
+
+@media (max-width: 640px) {
+    .wifi-row-editing {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    .wifi-row-editing .wifi-row-body {
+        flex: 1 1 100%;
+        width: 100%;
+        order: 1;
+    }
+
+    .wifi-row-editing .wifi-row-actions {
+        order: 2;
+        margin-left: auto;
+    }
+
+    .wifi-row-editing .wifi-edit-row {
+        display: grid;
+        grid-template-columns: 90px minmax(0, 1fr);
+        align-items: center;
+        width: 100%;
+    }
+
+    .wifi-row-editing .wifi-edit-label {
+        min-width: 0;
+    }
+
+    .wifi-row-editing .wifi-edit-input,
+    .wifi-row-editing .wifi-edit-pass-wrap {
+        min-width: 0;
+        width: 100%;
+    }
+}
+
+/* Row action buttons (edit, delete, arrows) */
+.wifi-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+}
+
+/* Up/down arrow buttons — visible only on touch devices */
+.wifi-arrow-btn {
+    display: none; /* hidden by default (pointer:fine = mouse) */
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.wifi-arrow-btn:disabled {
+    opacity: 0.25;
+    cursor: default;
+}
+.wifi-arrow-btn:not(:disabled):hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--text-primary);
+}
+
+@media (pointer: coarse) {
+    .wifi-arrow-btn { display: inline-flex; }
+}
+
+/* ── Add network form ────────────────────────────── */
+.wifi-add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.wifi-add-input {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-accent);
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.68rem;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.wifi-add-input:focus {
+    border-color: var(--accent);
+}
+.wifi-add-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Password field wrapper — used in both "Add network" and "Hotspot" forms */
+.wifi-add-pass-wrap,
+.wifi-pw-wrap {
+    position: relative;
+}
+.wifi-add-pass-wrap .wifi-add-input,
+.wifi-pw-wrap .wifi-add-input {
+    padding-right: 36px;
+}
+
+/* Eye toggle button — overlaid on the right edge of the input */
+.wifi-add-eye,
+.wifi-pw-toggle {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 2px;
+    color: var(--text-dim);
+    transition: color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.wifi-add-eye:hover,
+.wifi-pw-toggle:hover {
+    color: var(--text-secondary);
+}
+
+/* ── System action buttons ───────────────────────── */
+.system-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* btn-ghost colour variants */
+.btn-ghost-green {
+    color: var(--green-bright);
+    border-color: rgba(46,204,113,0.25);
+    background: rgba(46,204,113,0.07);
+}
+.btn-ghost-green:hover {
+    background: rgba(46,204,113,0.14);
+    border-color: rgba(46,204,113,0.4);
+    color: #6effa8;
+}
+
+.btn-ghost-danger {
+    color: var(--red);
+    border-color: rgba(231,76,60,0.25);
+    background: rgba(231,76,60,0.07);
+}
+.btn-ghost-danger:hover {
+    background: rgba(231,76,60,0.14);
+    border-color: rgba(231,76,60,0.4);
+    color: #ff8877;
 }

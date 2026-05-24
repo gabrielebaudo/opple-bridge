@@ -1,0 +1,12 @@
+[Unit]
+Description=Opple Bridge Hotspot Fallback (no known WiFi)
+After=network-online.target opple-bridge-wifi-bootstrap.service
+Wants=network-online.target opple-bridge-wifi-bootstrap.service
+
+[Service]
+Type=oneshot
+ExecStart=__REPO_DIR__/raspberry/scripts/hotspot-fallback.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

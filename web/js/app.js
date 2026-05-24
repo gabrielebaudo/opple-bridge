@@ -17,6 +17,18 @@ function oppleBridge() {
             spectrum: [0, 0, 0, 0, 0, 0],
         },
 
+        _emptyData() {
+            return {
+                type: 'measurement',
+                connection: { status: 'disconnected', device_name: null, device_address: null, mock_mode: false, battery_pct: null },
+                lux: 0, cct_k: 0, duv: 0,
+                cie_x: 0, cie_y: 0, cie_u: 0, cie_v: 0,
+                cri_ra: null, r9: null, r_values: null,
+                cs: null, eml: null,
+                spectrum: [0, 0, 0, 0, 0, 0],
+            };
+        },
+
         flicker: null,
         flickerLoading: false,
 
@@ -31,12 +43,16 @@ function oppleBridge() {
 
         _cieTimer: null,
 
+        // Pi battery (PiSugar 3). Hidden when unavailable (dev/no hardware).
+        piBattery: { available: false, battery_pct: null, charging: false },
+
         paramInfo: window.PARAM_INFO,
 
         // Spread modules
         ...window.ConnectionModule,
         ...window.TargetModule,
         ...window.FlickerChartModule,
+        ...window.SettingsModule,
 
         // --- Core methods ---
 
@@ -66,6 +82,26 @@ function oppleBridge() {
             if (document.fonts && document.fonts.ready) {
                 document.fonts.ready.then(() => this.updateCIE()).catch(() => {});
             }
+
+            // Pi battery: fetch once immediately, then every 15 s.
+            this.fetchPiBattery();
+            setInterval(() => this.fetchPiBattery(), 15000);
+        },
+
+        fetchPiBattery() {
+            fetch('/api/pi_battery')
+                .then(r => r.ok ? r.json() : null)
+                .then(d => { if (d) this.piBattery = d; })
+                .catch(() => {});
+        },
+
+        // Color modifier for the Pi battery pill.
+        // Thresholds match PiSugar safe-charge range: ≥40 green, 15-39 amber, <15 red.
+        piBatteryClass(pct) {
+            if (pct == null) return '';
+            if (pct >= 40) return 'battery-good';
+            if (pct >= 15) return 'battery-mid';
+            return 'battery-low';
         },
 
         /**

@@ -74,3 +74,60 @@ class FlickerData(BaseModel):
     waveform: list[float] = Field(default_factory=list)
     fft_freq: list[float] = Field(default_factory=list)
     fft_mag: list[float] = Field(default_factory=list)
+
+
+class HealthStatus(BaseModel):
+    status: str
+    uptime_s: float
+    last_measurement_age_s: Optional[float]
+    last_error: Optional[str]
+    version: str
+    ble_state: str
+    ws_clients: int
+
+
+class WifiNetworkOut(BaseModel):
+    ssid: str
+    priority: int
+    has_password: bool
+    autoconnect: bool = True
+    password: Optional[str] = None
+
+
+class WifiNetworkIn(BaseModel):
+    ssid: str
+    password: Optional[str] = None
+    priority: int = 50
+
+
+class WifiNetworkUpdate(BaseModel):
+    new_ssid: Optional[str] = None
+    password: Optional[str] = None
+    priority: Optional[int] = None
+
+
+class WifiReorder(BaseModel):
+    order: list[str]
+
+
+class WifiStatus(BaseModel):
+    connected: bool
+    ssid: Optional[str] = None
+    ip_address: Optional[str] = None
+    is_hotspot: bool = False
+
+
+class HotspotConfig(BaseModel):
+    ssid: str
+    has_password: bool
+
+
+class HotspotConfigUpdate(BaseModel):
+    ssid: str
+    password: Optional[str] = None
+
+
+class SystemInfo(BaseModel):
+    version: str
+    git_sha: str
+    uptime_s: float

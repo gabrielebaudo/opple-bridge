@@ -5,6 +5,7 @@ window.ConnectionModule = {
     devices: [],
     scanning: false,
     showDeviceList: false,
+    _disconnecting: false,
 
     connectWS() {
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
@@ -19,6 +20,7 @@ window.ConnectionModule = {
             try {
                 const msg = JSON.parse(e.data);
                 if (msg.type === 'measurement') {
+                    if (this._disconnecting) return;
                     this.data = msg;
                     this.scheduleCIE();
                 } else if (msg.type === 'flicker') {
@@ -26,7 +28,9 @@ window.ConnectionModule = {
                     this.flickerLoading = false;
                     this.$nextTick(() => this.drawFlicker());
                 } else if (msg.type === 'connection') {
-                    this.data.connection = msg;
+                    // Clears the disconnect guard — WS confirms server-side state change
+                    this._disconnecting = false;
+                    this.data = { ...this.data, connection: { ...msg } };
                 }
             } catch (err) { console.warn('WS parse error:', err); }
         };
@@ -67,7 +71,7 @@ window.ConnectionModule = {
     async connectToDevice(address) {
         this.showDeviceList = false;
         this.scanning = false;
-        this.data.connection.status = 'connecting';
+        this.data = { ...this.data, connection: { ...this.data.connection, status: 'connecting' } };
         try {
             await fetch('/api/connect', {
                 method: 'POST',
@@ -81,11 +85,16 @@ window.ConnectionModule = {
     },
 
     async disconnectDevice() {
+        this._disconnecting = true;
+        // Fallback: if backend never sends connection WS message, unblock after 3s
+        setTimeout(() => { this._disconnecting = false; }, 3000);
         try {
             await fetch('/api/disconnect', { method: 'POST' });
-            this.data.connection.status = 'disconnected';
-            this.data.connection.device_name = null;
+            this.data = this._emptyData();
+            this.flicker = null;
+            this.$nextTick(() => this.updateCIE());
         } catch (err) {
+            this._disconnecting = false;
             console.error('Disconnect failed:', err);
         }
     },

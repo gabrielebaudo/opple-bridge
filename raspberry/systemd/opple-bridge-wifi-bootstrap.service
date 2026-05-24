@@ -1,0 +1,13 @@
+[Unit]
+Description=Opple Bridge WiFi Bootstrap
+Before=network-online.target
+Wants=NetworkManager.service
+After=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=__REPO_DIR__/raspberry/scripts/wifi-bootstrap.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

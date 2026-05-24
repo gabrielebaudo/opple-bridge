@@ -1,0 +1,7 @@
+networks: []
+
+hotspot:
+  ssid: "OPPLE BRIDGE"
+  psk: null         # open network; set a string for WPA2
+  ip: "192.168.1.1"
+  fallback_after_s: 45

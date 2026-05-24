@@ -1,0 +1,7 @@
+refresh:
+  partial_before_full: 5      # full refresh ogni N partial (riduce ghosting)
+  force_full_interval_m: 30   # full refresh forzato ogni X minuti
+
+battery:
+  warning_pct: 15             # mostra avviso sul display
+  shutdown_pct: 5             # graceful shutdown

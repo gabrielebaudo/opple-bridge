@@ -1,0 +1,16 @@
+[Unit]
+Description=Opple Pi Sidecar (display + monitoring)
+After=opple-bridge.service pisugar-server.service
+Wants=opple-bridge.service pisugar-server.service
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__REPO_DIR__/raspberry
+ExecStart=__REPO_DIR__/venv/bin/python -m opple_pi
+Restart=always
+RestartSec=5
+Environment=OPPLE_PI_LOG_LEVEL=info
+
+[Install]
+WantedBy=multi-user.target
