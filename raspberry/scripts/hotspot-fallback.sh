@@ -10,10 +10,20 @@ MAX_WAIT=45
 CHECK_INTERVAL=3
 HOTSPOT_CON="opple-hotspot"
 
-# --- Idempotence: already in AP mode → nothing to do ---
-if nmcli -t -f GENERAL.STATE device show wlan0 2>/dev/null | grep -qi "local.only"; then
-    echo "hotspot-fallback: wlan0 already in AP mode, exiting"
+# --- If already on a real infrastructure network, nothing to do ---
+state=$(nmcli -t -f CONNECTIVITY general 2>/dev/null || true)
+if [ "$state" = "full" ]; then
+    echo "hotspot-fallback: connectivity=full at start, no hotspot needed"
     exit 0
+fi
+
+# --- Release wlan0 from any AP mode (hotspot auto-started by NM on boot) ---
+# This lets NetworkManager try infrastructure connections during MAX_WAIT.
+if nmcli -t -f GENERAL.STATE device show wlan0 2>/dev/null | grep -qi "local.only\|ap"; then
+    echo "hotspot-fallback: wlan0 in AP mode at boot — disconnecting to allow infra scan"
+    nmcli device disconnect wlan0 2>/dev/null || true
+    nmcli connection delete "$HOTSPOT_CON" 2>/dev/null || true
+    sleep 2
 fi
 
 # --- Wait for connectivity ---
@@ -78,6 +88,8 @@ fi
 echo "hotspot-fallback: SSID='${SSID}' IP=${IP}"
 
 # --- Activate hotspot with explicit IP ---
+# connection.autoconnect no: prevents NM from re-activating the hotspot
+# on the next boot, which would block infrastructure auto-connect.
 nmcli device disconnect wlan0 2>/dev/null || true
 nmcli connection delete "$HOTSPOT_CON" 2>/dev/null || true
 
@@ -88,6 +100,7 @@ HOTSPOT_ARGS=(
     802-11-wireless.band bg
     ipv4.method shared
     ipv4.addresses "${IP}/24"
+    connection.autoconnect no
 )
 if [ -n "$PSK" ]; then
     HOTSPOT_ARGS+=(wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PSK")
